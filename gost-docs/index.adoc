@@ -1,0 +1,18 @@
+= Руководство программиста: Модуль машинного перевода {product-name}
+:product-name: LibreTranslate API
+:product-version: 1.6.0
+:doc-code: АБВГ.00001-01 33 01
+:toc: left
+:toc-title: Содержание
+:sectnums:
+:sectnumlevels: 3
+:source-highlighter: highlight.js
+:icons: font
+
+[cols="1,1", frame=none, grid=none]
+|===
+| Обозначение документа: {doc-code}
+| Версия ПО: {product-version}
+|===
+
+include::sections/01_purpose.adoc[]
