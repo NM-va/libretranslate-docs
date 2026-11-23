@@ -1,0 +1,292 @@
+openapi: 3.1.0
+info:
+  title: LibreTranslate API
+  version: 1.9.6
+  description: |
+    REST API для автоматического машинного перевода текстов и файлов, 
+    определения языка исходного текста и мониторинга состояния сервиса.
+servers:
+  - url: http://localhost:5000
+    description: Локальный сервер разработки (Docker)
+
+tags:
+  - name: Translation
+    description: Операции перевода текста и документов
+  - name: Languages
+    description: Справочная информация и определение языка
+  - name: System
+    description: Системные методы и проверка работоспособности
+
+paths:
+  /languages:
+    get:
+      tags:
+        - Languages
+      summary: Получить список поддерживаемых языков
+      description: Возвращает массив языков, установленных на сервере, и список доступных целевых языков для каждого из них.
+      operationId: getLanguages
+      responses:
+        '200':
+          description: Успешное получение списка языков
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LanguageItem'
+
+  /detect:
+    post:
+      tags:
+        - Languages
+      summary: Определить язык текста
+      description: Анализирует переданный фрагмент текста и возвращает вероятные языки с оценкой достоверности.
+      operationId: detectLanguage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectRequest'
+      responses:
+        '200':
+          description: Язык успешно определён
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DetectResponseItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /translate:
+    post:
+      tags:
+        - Translation
+      summary: Перевести текст
+      description: Выполняет машинный перевод текстового фрагмента или HTML-разметки с исходного языка на целевой.
+      operationId: translateText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateRequest'
+      responses:
+        '200':
+          description: Текст успешно переведён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /translate_file:
+    post:
+      tags:
+        - Translation
+      summary: Перевести файл
+      description: Загружает документ поддерживаемого формата (`.txt`, `.srt`, `.docx`, `.epub`, `.odt`) и возвращает ссылку на переведённый файл.
+      operationId: translateFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - source
+                - target
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Файл для перевода (кодировка UTF-8).
+                source:
+                  type: string
+                  example: zh
+                  description: Код исходного языка (ISO 639-1) или `auto`.
+                target:
+                  type: string
+                  example: ru
+                  description: Код целевого языка (ISO 639-1).
+                api_key:
+                  type: string
+                  description: Ключ доступа (если включена авторизация на сервере).
+      responses:
+        '200':
+          description: Файл успешно переведён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  translatedFileUrl:
+                    type: string
+                    format: uri
+                    example: http://localhost:5000/download/translated_subtitles_ru.srt
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /health:
+    get:
+      tags:
+        - System
+      summary: Проверить работоспособность сервиса (Healthcheck)
+      description: Используется системами мониторинга и оркестрации (Docker, Kubernetes) для проверки готовности API к приёму запросов.
+      operationId: checkHealth
+      responses:
+        '200':
+          description: Сервис работает штатно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+components:
+  schemas:
+    LanguageItem:
+      type: object
+      properties:
+        code:
+          type: string
+          example: zh
+          description: Код языка по стандарту ISO 639-1.
+        name:
+          type: string
+          example: Chinese
+          description: Название языка на английском.
+        targets:
+          type: array
+          items:
+            type: string
+          example: ["en", "ru"]
+          description: Список кодов языков, на которые доступен перевод.
+
+    DetectRequest:
+      type: object
+      required:
+        - q
+      properties:
+        q:
+          type: string
+          example: 你好，世界！
+          description: Текст для определения языка.
+        api_key:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+          description: Ключ доступа к API.
+
+    DetectResponseItem:
+      type: object
+      properties:
+        confidence:
+          type: number
+          format: float
+          example: 98.5
+          description: Вероятность корректного определения языка (в процентах).
+        language:
+          type: string
+          example: zh
+          description: Определённый код языка.
+
+    TranslateRequest:
+      type: object
+      required:
+        - q
+        - source
+        - target
+      properties:
+        q:
+          type: string
+          example: 你好，今天天气怎么样？
+          description: Исходный текст или HTML-фрагмент для перевода.
+        source:
+          type: string
+          example: zh
+          description: Код исходного языка или `auto` для автоопределения.
+        target:
+          type: string
+          example: ru
+          description: Код целевого языка перевода.
+        format:
+          type: string
+          enum: [text, html]
+          default: text
+          description: Формат передаваемого текста.
+        alternatives:
+          type: integer
+          minimum: 0
+          maximum: 5
+          default: 0
+          description: Количество альтернативных вариантов перевода.
+        api_key:
+          type: string
+          description: Ключ доступа к API.
+
+    TranslateResponse:
+      type: object
+      properties:
+        translatedText:
+          type: string
+          example: Привет, как сегодня погода?
+          description: Основной вариант переведённого текста.
+        alternatives:
+          type: array
+          items:
+            type: string
+          example: ["Здравствуй, какая сегодня погода?"]
+          description: Список альтернативных переводов (если параметр `alternatives` > 0).
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid request: missing 'q' parameter"
+          description: Текстовое описание причины ошибки.
+
+  responses:
+    BadRequest:
+      description: Некорректные параметры запроса или неподдерживаемый формат данных.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Недействительный или отсутствующий ключ доступа (`api_key`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: Превышен лимит частоты запросов (Rate Limit).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Внутренняя ошибка сервера при обработке запроса.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
